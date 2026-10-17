@@ -2,5 +2,5 @@
 // GitHub tokens, or a Supabase secret key in this public file.
 window.JOONEH_CONFIG = Object.freeze({
   supabaseUrl: 'https://epefsfgkuewsjcvbcvii.supabase.co',
-  supabasePublishableKey: ''
+  supabasePublishableKey: 'sb_publishable_gnFvQ9v-58yPwzYGCMpK2w_Qm-x85Dn'
 });

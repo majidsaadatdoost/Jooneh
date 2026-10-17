@@ -3,6 +3,9 @@
 begin;
 create schema if not exists jooneh_private;
 revoke all on schema jooneh_private from public, anon, authenticated;
+create table jooneh_private.members (user_id uuid primary key references auth.users(id) on delete cascade);
+alter table jooneh_private.members enable row level security;
+create policy own_membership on jooneh_private.members for select to authenticated using ((select auth.uid())=user_id);
 create table jooneh_private.journals (
  user_id uuid primary key references auth.users(id) on delete cascade,
  revision bigint not null default 0,
@@ -45,10 +48,10 @@ begin
  return result;
 end $$;
 
-create function public.jooneh_read() returns jsonb language plpgsql security definer set search_path='' as $$
+create function jooneh_private.jooneh_read() returns jsonb language plpgsql security definer set search_path='' as $$
 declare uid uuid:=auth.uid(); j jooneh_private.journals; rows jsonb;
 begin
- if uid is null then raise exception 'Authentication required' using errcode='42501';end if;
+ if uid is null or not exists(select 1 from jooneh_private.members where user_id=uid) then raise exception 'Authorized account required' using errcode='42501';end if;
  -- Lock against concurrent writes so revision and records form one snapshot.
  select * into j from jooneh_private.journals where user_id=uid for share;
  if not found then return jsonb_build_object('state',null,'revision',0);end if;
@@ -56,10 +59,10 @@ begin
  return jsonb_build_object('state',jooneh_private.assemble(rows),'revision',j.revision,'updatedAt',j.updated_at);
 end $$;
 
-create function public.jooneh_write(p_revision bigint,p_mutation uuid,p_changes jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+create function jooneh_private.jooneh_write(p_revision bigint,p_mutation uuid,p_changes jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare uid uuid:=auth.uid(); j jooneh_private.journals; c jsonb; k text; v jsonb; next_rev bigint; n integer; seen text[]:='{}';
 begin
- if uid is null then raise exception 'Authentication required' using errcode='42501';end if;
+ if uid is null or not exists(select 1 from jooneh_private.members where user_id=uid) then raise exception 'Authorized account required' using errcode='42501';end if;
  if p_revision is null or p_revision<0 or p_mutation is null or jsonb_typeof(p_changes) is distinct from 'array' then raise exception 'Invalid input' using errcode='22023';end if;
  n:=jsonb_array_length(p_changes);
  if n<1 or n>200 or octet_length(p_changes::text)>8000000 then raise exception 'Invalid input size' using errcode='22023';end if;
@@ -89,23 +92,32 @@ begin
  return jsonb_build_object('revision',next_rev,'updatedAt',now());
 end $$;
 
-create function public.jooneh_history() returns jsonb language plpgsql security definer set search_path='' as $$
+create function jooneh_private.jooneh_history() returns jsonb language plpgsql security definer set search_path='' as $$
 declare uid uuid:=auth.uid(); result jsonb;
 begin
- if uid is null then raise exception 'Authentication required' using errcode='42501';end if;
+ if uid is null or not exists(select 1 from jooneh_private.members where user_id=uid) then raise exception 'Authorized account required' using errcode='42501';end if;
  select coalesce(jsonb_agg(to_jsonb(t)),'[]'::jsonb) into result from (select revision,max(updated_at) as updated_at,count(*) as changed_records from jooneh_private.history where user_id=uid group by revision order by revision desc limit 30) t;
  return result;
 end $$;
-create function public.jooneh_read_version(p_revision bigint) returns jsonb language plpgsql security definer set search_path='' as $$
+create function jooneh_private.jooneh_read_version(p_revision bigint) returns jsonb language plpgsql security definer set search_path='' as $$
 declare uid uuid:=auth.uid(); rows jsonb;
 begin
- if uid is null then raise exception 'Authentication required' using errcode='42501';end if;
+ if uid is null or not exists(select 1 from jooneh_private.members where user_id=uid) then raise exception 'Authorized account required' using errcode='42501';end if;
  if p_revision is null or p_revision<1 then raise exception 'Invalid version' using errcode='22023';end if;
  select jsonb_agg(jsonb_build_object('record_key',record_key,'value',value)) into rows from (select distinct on (record_key) record_key,value from jooneh_private.history where user_id=uid and revision<=p_revision order by record_key,revision desc) t;
  if rows is null then raise exception 'Version not found' using errcode='22023';end if;
  return jsonb_build_object('state',jooneh_private.assemble(rows),'revision',p_revision);
 end $$;
-revoke all on function jooneh_private.assemble(jsonb) from public,anon,authenticated;
+revoke all on all functions in schema jooneh_private from public,anon,authenticated;
+grant usage on schema jooneh_private to authenticated;
+grant execute on function jooneh_private.jooneh_read() to authenticated;
+grant execute on function jooneh_private.jooneh_write(bigint,uuid,jsonb) to authenticated;
+grant execute on function jooneh_private.jooneh_history() to authenticated;
+grant execute on function jooneh_private.jooneh_read_version(bigint) to authenticated;
+create function public.jooneh_read() returns jsonb language sql security invoker set search_path='' as $$ select jooneh_private.jooneh_read() $$;
+create function public.jooneh_write(p_revision bigint,p_mutation uuid,p_changes jsonb) returns jsonb language sql security invoker set search_path='' as $$ select jooneh_private.jooneh_write(p_revision,p_mutation,p_changes) $$;
+create function public.jooneh_history() returns jsonb language sql security invoker set search_path='' as $$ select jooneh_private.jooneh_history() $$;
+create function public.jooneh_read_version(p_revision bigint) returns jsonb language sql security invoker set search_path='' as $$ select jooneh_private.jooneh_read_version(p_revision) $$;
 revoke all on function public.jooneh_read() from public,anon,authenticated;
 revoke all on function public.jooneh_write(bigint,uuid,jsonb) from public,anon,authenticated;
 revoke all on function public.jooneh_history() from public,anon,authenticated;
