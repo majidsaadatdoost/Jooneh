@@ -36,7 +36,9 @@ const FOOD_ROWS=[
 ['chickpea','نخود پخته','🫘','پروتئین',150,'گرم',246,13.3,41.1,3.9,11.4,7.2,'بدون روغن؛ وزن پخته و آبکش‌شده.'],
 ['chocolate','شکلات تلخ ۷۰–۸۵٪','🍫','میان‌وعده',10,'گرم',60,.8,4.6,4.3,1.1,2.4,'تخمین عمومی؛ اندازه مربع‌ها و درصد کاکائو مهم است.']
 ];
-const FOODS=FOOD_ROWS.map(r=>{const [id,name,emoji,category,base,unit,kcal,protein,carb,fat,fiber,sugar,note]=r;return {id,name,emoji,category,base,unit,kcal,protein,carb,fat,fiber,sugar,note,source:id==='skyr'||id==='icecream'?'اطلاعات شما؛ نیازمند برچسب':'تخمین عمومی؛ وابسته به نوع و پخت'};});
+const LEGACY_FOODS=FOOD_ROWS.map(r=>{const [id,name,emoji,category,base,unit,kcal,protein,carb,fat,fiber,sugar,note]=r;return {id,name,emoji,category,base,unit,kcal,protein,carb,fat,fiber,sugar,note,source:id==='skyr'||id==='icecream'?'اطلاعات شما؛ نیازمند برچسب':'تخمین عمومی؛ وابسته به نوع و پخت'};});
+// Stable IDs preserve favorites; old diary entries retain their own food snapshots.
+const FOODS=[...new Map([...LEGACY_FOODS,...REFERENCE_FOODS].map(f=>[f.id,f])).values()];
 const RECIPES=[
 {id:'r1',name:'کاسه خیار و ماست',emoji:'🥒',time:'۵ دقیقه',items:[['skyr',150],['cucumber',100],['carrot',50]],method:'خیار و هویج را خلال کن و کنار ماست بگذار. نعناع خشک یا آب‌لیمو به دلخواه.'},
 {id:'r2',name:'لقمه تخم‌مرغ',emoji:'🥚',time:'۱۲ دقیقه',items:[['egg',2],['sangak',60],['tomato',100]],method:'تخم‌مرغ‌ها را آب‌پز کن و با نان و گوجه بخور. اگر نیمرو دوست داری، روغن مصرفی را هم ثبت کن.'},
