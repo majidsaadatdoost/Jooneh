@@ -10,10 +10,39 @@ for(const [,id]of fs.readFileSync('docs/index.html','utf8').matchAll(/id="([^"]+
 els.mealSelect.value='ناهار';
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status});
 const c={console,Intl,Date,Math,Number,String,JSON,Set,Map,Object,Array,Blob,URL,Response,crypto:webcrypto,setTimeout:()=>1,clearTimeout(){},confirm:()=>true,scrollTo(){},addEventListener(t,f){events[t]=f},localStorage:{getItem:()=>null,setItem(){throw Error('No diary in browser storage')}},document:{getElementById:id=>{assert(els[id],'Missing DOM ID '+id);return els[id]},querySelector:s=>s==='.cloud-toolbar'?toolbar:null,querySelectorAll:()=>[],addEventListener(t,f){events['document:'+t]=f},createElement:()=>({click(){}})},JoonehAuth:{ready:async()=>({id:'test-only'}),read:async()=>response({state:structuredClone(remote),revision,account:{email:'test'}}),write:async input=>{writes.push(structuredClone(input));assert.equal(input.revision,revision);for(const change of input.changes){if(change.key==='meta'){assert.deepEqual(Object.keys(change.value).sort(),['favorites','foods','goals','profile','version']);Object.assign(remote,structuredClone(change.value));}else if(change.value===null)delete remote.days[change.key.slice(4)];else remote.days[change.key.slice(4)]=structuredClone(change.value);}revision++;return response({revision});}}};c.window=c;vm.createContext(c);
-for(const f of ['core.js','reference-foods.js','data.js','catalog.js','app.js'])vm.runInContext(fs.readFileSync('docs/assets/'+f,'utf8'),c,{filename:f});
+for(const f of ['core.js','reference-foods.js','data.js','catalog.js','analytics.js','reports.js','app.js'])vm.runInContext(fs.readFileSync('docs/assets/'+f,'utf8'),c,{filename:f});
 const run=s=>vm.runInContext(s,c);const tick=()=>new Promise(r=>setImmediate(r));async function settled(){for(let i=0;i<30;i++){await tick();if(!run('cloudBusy'))return;}throw Error('Queue not settled')}
 await settled();assert(run('cloudReady'));assert.equal(writes.length,0);assert.equal(JSON.stringify(remote),original);assert(run('validBackup(state)'));run("changeDay('2026-10-18')");
 assert(els.nutrients.innerHTML.includes('۱۳٫۵'));assert(els.nutrients.innerHTML.includes('از هدف روزانهٔ'));assert(!els.nutrients.innerHTML.includes(' / '));
+// Calendar/report navigation is read-only, including returning to an old diary date.
+run("switchTab('analytics')");
+assert(els.periodDates.textContent.includes('۱۴۰۵'));
+assert(els.dailyReportRows.innerHTML.includes('یکشنبه'));
+assert(els.dailyReportRows.innerHTML.includes('غذایی ثبت نشده؛ در میانگین حساب نمی‌شود'));
+els.monthlyView.onclick();assert.equal(run('reportMode'),'month');
+assert(els.periodTitle.textContent.includes('مهر'));
+assert.equal((els.trendChart.innerHTML.match(/data-report-day=/g)||[]).length,30);
+els.trendMetric.value='sugar';els.trendMetric.onchange();assert(els.trendChart.innerHTML.includes('≥'));
+assert(!els.trendChart.innerHTML.includes('NaN'));assert(!els.trendChart.innerHTML.includes('Infinity'));
+els.previousPeriod.onclick();assert(els.periodTitle.textContent.includes('شهریور'));
+els.nextPeriod.onclick();assert(els.periodTitle.textContent.includes('مهر'));
+els.dayPicker.onclick();assert.equal(els.calendarDialog.open,true);
+assert(els.calendarDays.innerHTML.includes('data-calendar-day="2026-10-18"'));
+els.calendarYear.value='1403';els.calendarMonth.value='12';els.calendarMonth.onchange();
+assert.equal((els.calendarDays.innerHTML.match(/data-calendar-day=/g)||[]).length,30);
+const clickData=dataset=>events['document:click']({target:{closest:()=>({dataset})}});
+clickData({calendarDay:'2025-03-20'});assert.equal(run('day'),'2025-03-20');assert.equal(els.calendarDialog.open,false);
+clickData({reportDay:'2026-10-18'});assert.equal(run('day'),'2026-10-18');
+assert.equal(JSON.stringify(remote),original);assert.equal(writes.length,0);
+// Optional goals save only meta and accept a deliberate zero cap. Legacy state remains valid.
+run('fillSettings()');els.goalCarb.value='180';els.goalFat.value='60';els.goalSugar.value='0';
+els.goalForm.events.submit({preventDefault(){}});await settled();
+assert.equal(remote.goals.carb,180);assert.equal(remote.goals.fat,60);assert.equal(remote.goals.sugar,0);
+assert(run('validBackup(state)'));assert.equal(JSON.stringify(remote.days),originalDays);
+assert(writes.at(-1).changes.every(x=>x.key==='meta'));
+assert(els.nutrients.innerHTML.includes('سقف شخصی'));assert(els.nutrients.innerHTML.includes('اطلاعات ناقص'));
+assert(!els.nutrients.innerHTML.includes('NaN'));assert(!els.nutrients.innerHTML.includes('Infinity'));
+run('fillSettings()');assert.equal(els.goalSugar.value,0);
 run("openFoodEditor(state.foods[0])");els.customKcal.value='250';els.customProtein.value='15';run("selectedIcon='🥜'");els.customForm.events.submit({preventDefault(){}});await settled();
 assert.equal(remote.foods[0].id,'old-custom');assert.equal(remote.foods[0].kcal,250);assert.equal(remote.foods[0].emoji,'🥜');assert.equal(JSON.stringify(remote.days),originalDays);assert(writes.at(-1).changes.every(x=>x.key==='meta'));
 run("archiveFood('old-custom')");await settled();assert.equal(run("allFoods().some(f=>f.id==='old-custom')"),false);assert.equal(run("allFoods(true).some(f=>f.id==='old-custom')"),true);assert.equal(JSON.stringify(remote.days),originalDays);

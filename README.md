@@ -56,3 +56,12 @@ Supabase JS v2.102.0: `docs/assets/vendor/SUPABASE-LICENSE`.
 غذاهای آماده و شخصی قابل ویرایش و کپی‌اند. حذف، غذا را به بایگانی قابل‌بازگشت همان حساب می‌برد؛ سابقه وعده‌ها پاک نمی‌شود. انتخاب آیکون و نمایش «مصرف‌شده / از هدف روزانه» در دو خط اضافه شده است. ذخیره فقط پس از عمل کاربر انجام می‌شود؛ بازکردن نسخه جدید داده‌ای نمی‌نویسد. تغییر ساختار دیتابیس، تغییر داده موجود، یا بازنویسی وعده‌ها در این انتشار وجود ندارد.
 
 آزمایش سازگاری و حفظ ثبت‌های قدیمی: `node tests/catalog-client.mjs`.
+
+
+## Calendar and reports (v4)
+
+The «روند و مقایسه» tab aggregates stored entry snapshots into Saturday–Friday weeks or Persian calendar months. Calendar navigation and reports never call the write API. Averages include only days with at least one food entry (including explicitly logged zero-energy food); unrecorded days are not zero intake. Missing nutrient fields stay marked as partial, and comparisons for those fields are withheld. Current goals are shown as current references, not reconstructed historical targets.
+
+Dates displayed to the user use the Persian calendar and weekday names. Gregorian ISO day keys in Supabase and JSON backups remain unchanged. New optional carb/fat/total-sugar goals use the existing meta document; only an explicit settings save writes them. No migration or backfill is required. Total sugar is a personal cap, not an added-sugar recommendation.
+
+Frontend regression checks: `node tests/auth.mjs`, `node tests/catalog-client.mjs`, and `node tests/analytics.mjs` (also under `TZ=Asia/Tehran` and `TZ=America/New_York`). They use synthetic state and no live database access.
